@@ -160,12 +160,81 @@ fun main {
 - 이런 경우 클래스 이름을 생략하고 ::로 참조를 바로 시작한다
 - 람다가 인자가 여럿인 다른 함수에게 작업을 위임하는 경우, 멤버 참조를 사용하면 아주 편리하다
 ```.kt
-val action = 
+val action = { person: Person, message: String -> sendEmail(person, message) }
+val nextAction = ::sendEmail <- // 람다 대신 멤버참조 사용
+```
+- 생성자 참조를 사용하면 클래스 생성 작업을 연기하거나 저장해둘 수 있다
+- :: 뒤에 클래스 이름을 넣으면 생성자 참조를 만들 수 있다
+```.kt
+val createPerson = ::Person
+val p = createPerson("Alice", 29)
+```
+- 확장 함수도 멤버 함수와 같은 방식으로 참조할 수 있다
+```.kt
+fun Person.isAdult() = age >= 21
+val predicate = Person::isAdult
 ```
 
+### 1-6 값과 엮인 호출 가능 참조
+- 지금까지 멤버 참조는 항상 클래스의 멤버를 가리켰다
+- 값과 엮인 호출 가능 참조를 사용하면 같은 멤버 참조 구문을 사용해 특정 객체의 인스턴스에 대한 메서드 호출에 대한 참조를 만들 수 있다
+- 책의 예제가 그닥 실용성 없는 예제여서 첨부하지 않았다 나중에 실제로 보는게 더 좋을듯
 
+## 2 자바의 함수형 인터페이스 사용: 단일 추상 메서드
+- 코틀린은 자바와 완전히 호환된다. 이번 절에서는 어떻게 이런 호환이 가능한지 살펴본다
+- 처음 살펴봤던 OnClickListener 인터페이스는 내부에 추상 메서드 하나만을 가지고 있다
 
+```.java
+public void setOnClickListener(@Nullable OnClickListener l)
+```
 
+```.java
+public interface OnClickLisnter {
+    void onClick(View var1);
+}
+```
+- 자바8 부터는 이렇게 사용할 수 있다
+```.java
+button.setOnClickListener(view -> { /* */ }); 
+```
+- 코틀린에서는 단순히 람다를 전달하면 된다
+```.kt
+button.setOnClickListener { view -> /* */ }
+```
+- OnCickListener 인터페이스 안에 추상메서드가 단 하나뿐이기 때문에 이런 표현이 가능하며 이를 단일 추상 메서드(SAM, Single Abstract Method 인터페이스) 라고 부른다
+- 자바에는 Runnable, Callable등이 이에 해당하며 이를 활용하는 메서드도 많다
+
+### 2-1 람다를 자바 메서드의 파라미터로 전달
+- 함수형 인터페이스를 파라미터로 받은 모든 자바 메서드에 람다를 전달할 수 있다
+- 예를들어 다음 메서드는 Runnable을 인자로 받는다
+```.java
+void postponeComputation(int delay, Runnable computation);
+```
+- 코틀린에서는 이 함수를 호출할 때 람다를 인자로 보낼 수 있다. 컴파일러는 다옹으로 람다를 Runnable 인터페이스로 변환해준다
+```.kt
+postponeComputation(1000) { println(42) }
+```
+- Runnable을 명시적으로 구현하는 익명 객체를 생성함으로써 똑같은 효과를 낼 수 있다
+```.kt
+postponeComputation(1000, object: Runnable {
+    override fun run() {
+        println(42)
+    }
+}
+```
+- 하지만 차이가 있다. 명시적으로 객체를 선언하면 매번 호출할 때마다 새 인스턴스가 생긴다.
+- 람다를 사용하면 상황이 다르다. 람다가 자신이 정의된 함수의 변수에 접근하지 않는다면 함수가 호출될 때마다 라마에 해당하는 익명 객체가 재사용된다
+```.kt
+postponeComputation(1000) { println(42) } // 전체 프로그램에 Runnable 인스턴스가 하나만 만들어진다
+```
+- 람다가 자신을 둘러싼 환경의 변수를 캡처하면 더 이상 각각의 함수 호출에 인스턴스를 재사용할 수 업다
+```.kt
+fun handleComputation(id: String) {
+    postponeComputation(1000) {
+        println(id) // id가 캡처되고 handleComputation 호출시 마다 Runnable 인터페이스가 새로 만들어진다
+    }
+}
+```
 
 
 
