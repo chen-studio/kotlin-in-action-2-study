@@ -279,10 +279,117 @@ fun main() {
 ```
 ## 4 수신 객체 지정 람다
 - 코틀린 표준 라이브러리의 with, apply, also에 대해 알아본다
-- 
+- 수신 객체를 명시하지 않고 람다의 본문 안에서 다른 객체의 메서드를 호출할 수 있게 하는 것을 수신 객체 지정 람다라고 부른다
+
+### 4-1 with
+- 아래 예제를 보고 with 함수로 리팩토링 해보자
+```.kt
+fun alphabet() {
+    val result = StringBuilder()
+    for(letter in 'A'..'Z') {
+        result.append(letter)
+    }
+    result.append("\nalphabet done")
+    return result.toString()
+}
+```
+- 이 예제에서 result에 대해 다른 여러 메서드를 호출하면서 result를 반복적으로 사용했다
+- 현재는 그리 나쁘지 않지만 만약 result를 더 많이 사용하거나 반복해야 한다면 코드가 지저분해질 수 있다
+- with를 사용하는 방법으로 리팩토링 해보자
+```.kt
+fun alphabet() = with(StringBuilder()) {
+    for(letter in 'A'..'Z') {
+        append(letter)
+    }
+    append("\nalphabet done")
+    toString()
+}
+```
+- 다른 메서드와 마찬가지로 this.append() 처럼 this를 사용해도 되고 생략해도 된다
+- with는 파라미터가 2개인 메서드이다
+```.kt
+public inline fun <T, R> with(receiver: T, block: T.() -> R): R {
+    contract {
+        callsInPlace(block, InvocationKind.EXACTLY_ONCE)
+    }
+    return receiver.block()
+}
+```
+- 두번째 param의 block을 보면 receiver인 T를 받아 block 내부에서 receiver를 사용할 수 있도록 되어있다
+
+### 4-2 apply
+- apply 는 with와 거의 동일하지만 수신 객체를 반환한다는 차이가 있다
+- alphabet 메서드를 apply로 작성해보자
+```.kt
+fun alphabet() = StringBuilder().apply {
+    for(letter in 'A'..'Z') {
+        append(letter)
+    }
+    append("\nalphabet done")   
+}.toString()
+```
+- 보통 많이 사용되는 경우는 객체의 생성과 동시에 set메서드를 호출하고 싶을때 사용한다
+```.kt
+TextView(context).apply {
+    text = "Sample text"
+    textSize = 20.0
+    setPadding(10, 0, 0, 0)
+}
+```
+```.kt
+public inline fun <T> T.apply(block: T.() -> Unit): T {
+    contract {
+        callsInPlace(block, InvocationKind.EXACTLY_ONCE)
+    }
+    block()
+    return this // 자신 return
+}
 ```
 
+- with, apply는 수신 객체 지정 람다를 사용하는 일반적인 예 중 하나다
+- 더 구체적인 함수를 사용하여 비슷한 패턴으로 활용할 수 있다
+- 예를들어 표준 라이브러리의 buildString 함수를 활용하면 alphabet을 더 단순화 할 수 있다
+```.kt
+fun alphabet() = buildString {
+    for(letter in 'A'..'Z') {
+        append(letter)
+    }
+    append("\nalphabet done")   
+}
+```
 
+### 4-3 also
+- also도 apply와 마찬가지로 수신 객체를 받으며 block을 수행한 후 수신 객체를 그대로 반환한다
+- 단 apply와 차이는 람다 안에서 receiver가 아닌 parameter로 수신 객체를 전달받는다.
+- 따라서 람다 안에서 this가 아닌 it을 사용한다
+- 아래 예제에서는 과일의 각 이름을 대문자로 바꾸고 이 결과를 다른 list에도 추가한다
+- 그 후 이름이 5글자보다 더 긴 과일만 선택하고 그 결과를 출력한 다음 마지막으로 리스트를 뒤집는다
+```.kt
+fun main() {
+    val fruits = listOf("A", "B", "C")
+    val uppercaseFruits = mutableListOf<String>()
+    val reversedLongFruits = fruits
+        .map { it.upperCase() }
+        .also { uppercaseFruits.addAll(it) }
+        .filter { it.length > 5 }
+        .also { println(it) }
+        .reversed()
+}
+```
+
+- 책에는 없지만 앞에서 배운 멤버 참조를 사용하면 아래처럼도 가능하다
+```.kt
+fun main() {
+    val fruits = listOf("A", "B", "C")
+    val uppercaseFruits = mutableListOf<String>()
+    val reversedLongFruits = fruits
+        .map { it.uppercase() }
+        .also(uppercaseFruits::addAll)
+        .filter { it.length > 5 }
+        .also(::println)
+        .reversed()
+}
+```
 
 
 
