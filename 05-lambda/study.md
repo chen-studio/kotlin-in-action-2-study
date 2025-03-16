@@ -236,10 +236,51 @@ fun handleComputation(id: String) {
 }
 ```
 
+### 2-2 SAM 변환: 람다를 함수형 인터페이스로 명시적 변환
+- SAM 생성자는 컴파일러가 생성한 함수로 람다를 단일 추상 메서드 인터페이스의 인스턴스로 명시적으로 변환해준다
+- 이를 컴파일러가 변환을 자동으로 수행하지 못하는 맥락에서 사용할 수 있다
+- 예를 들어 함수형 인터페이스의 인스턴스를 반환하는 함수가 있다면 람다를 직접 반환할 수 없다
+- 대신 람다를 SAM 생성자로 감싸야 한다
+```.kt
+fun createAllDoneRunnable(): Runnable {
+    return Runnable { println("All Done") }
+}
+```
+- SAM 생성자의 이름은 사용하려는 함수형 인터페이스의 이름과 같다 아래 예시를 보자
+```.kt
+val listener = OnClickLisnter { view ->
+    val text = when(view.id) {
+        button.id -> "first"
+        button2.id -> "second"
+        else -> "unknown"
+    }
+    toast(text)
+}
+button1.setOnClickListener(listener)
+button2.setOnClickListener(listener)
+```
 
+## 3 코틀린에서 SAM 인터페이스 정의: fun interface
+- 코틀린에서도 SAM 인터페이스를 정의하는 방법이 있는데, fun interface를 사용하는 방법이다.
+- fun interface는 정확히 하나의 추상 메서드만을 포함해야 하지만, 추상 메서드가 아닌 다른 비슷한 메서드 여럿을 포함할 수 있다
+```.kt
+fun interface IntCondition {
+    fun check(i: Int): Boolean
+    fun checkString(s: String) = check(s.toInt())
+    fun checkChar(c: Char) = check(c.digitToInt())
+}
 
-
-
+fun main() {
+    val idOdd = IntCondition { it % 2 != 0 }
+    ...
+    isOdd.checkString("2")
+    isOdd.checkChar('3')
+}
+```
+## 4 수신 객체 지정 람다
+- 코틀린 표준 라이브러리의 with, apply, also에 대해 알아본다
+- 
+```
 
 
 
