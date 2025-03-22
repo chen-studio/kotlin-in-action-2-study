@@ -132,3 +132,57 @@ people.count { it.age <= 27 } // 1
 
 people.filter { it.age <= 27 }.size // 이 동작은 filter의 결과로 원소들을 저장하지만, count는 단순 개수만 세기 때문에 훨씬 효율적이다
 ```
+- 조건을 만족하는 원소를 하나 찾고 싶을땐 find를 사용한다
+```.kt
+people.find { it.age <= 27 } // Person("A", 20)
+```
+- find는 조건을 만족하는 원소가 있는 경우 첫번째 원소를 반환하며 없는경우 null을 반환한다
+- find와 firstOrNull은 동일하다
+
+### 1.4 리스트를 분할해 리스트의 쌍으로 만들기: partition
+- 컬렉션을 어떤 조건을 만족하는 그룹과 그렇지 않은 그룹으로 나누어야 한다면 filter와 filterNot을 사용해서 두번 연산을 진행할 것이다
+- 하지만 이를 더 간결하게 처리하는 방법이 partition 함수다
+```.kt
+val (groupA, groupB) = people.partition { it.age <= 27 } // 두개의 그룹으로 분리
+
+public inline fun <T> Iterable<T>.partition(predicate: (T) -> Boolean): Pair<List<T>, List<T>> {
+    val first = ArrayList<T>()
+    val second = ArrayList<T>()
+    for (element in this) {
+        if (predicate(element)) {
+            first.add(element)
+        } else {
+            second.add(element)
+        }
+    }
+    return Pair(first, second)
+}
+// partition은 Pair로 두개의 List를 반환한다.
+// 함수의 결과값이 Pair이고 이 값을 두개의 변수에 할당하고 싶다면, 괄호를 통해 한번에 사용할 수 있다
+val (a, b) = pairFunction()
+```
+
+### 1.5 리스트를 여러 그룹으로 이루어진 맵으로 바꾸기: groupBy
+- partition처럼 컬렉션의 원소들을 참과 거짓으로만 분리할 수 없는경우, groupBy를 사용하면 Map으로 묶을 수 있다
+```.kt
+val people = listOf(Person("A", 31), Person("B", 29), Person("C", 31))
+people.groupBy { it.age } // 결과는 Map<Int, List<Person>> 타입으로 리턴
+
+val list = listOf("apple", "apricot", "banana", "cantaloupe")
+list.groupBy(String::first) // String의 확장함수지만 멤버 참조 가능, Map<Char, List<String>>
+```
+
+### 1.6 컬렉션을 맵으로 변환: associate, associateWith, associateBy
+- groupBy함수는 원소들을 그룹화 하여 value가 List<T> 형태로 저장된다
+- 만약 원소를 그룹화 하지 않으면서 컬렉션을 Map으로 변환하고 싶은 경우, associate 함수를 사용한다
+```.kt
+val people = listOf(Person("A", 31), Person("B", 29), Person("C", 31))
+people.associate { it.name to it.age } => Map<String, Int> 로 리턴
+```
+- person은 그대로 두고 key 또는 value로 특정 요소를 지정하고 싶은 경우 associateWith, associateBy를 사용한다
+```.kt
+people.associateWith { it.age } // key = person, value = age가 되며 Map<Person, Int>
+people.associateBy { it.age } // key = age, value = person이 되며 Map<Int, Person>
+```
+- 다만 맵에서 key는 유일해야 한다. 이 함수들도 같은 키값을 여러개 사용한다면 마지막 결과가 덮어쓰여진다
+- 
