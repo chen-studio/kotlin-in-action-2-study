@@ -213,3 +213,56 @@ blankName.ifBlank { "blank" } // 문자열이 공백만 있으므로 blank
 blankName.ifEmpty { "empty" } // 문자열이 완전히 비어있는것은 아니므로 그대로 blankName의 값
 ```
 
+### 1.9 컬렉션 나누기: chunked와 windowed
+- 연속된 날의 온도에서 3일간의 온도 평균을 구하고 싶다면 크기가 3인 슬라이딩 윈도우를 쓸 수 있다
+- 이럴때 windowed 함수를 사용할 수 있다
+```.kt
+val temperatures = listOf(27.7, 29.8, 22.0, 35.5, 19.1)
+temperatures.windowed(3) // [27.7, 29.8, 22.0] [29.8, 22.0, 35.5] [22.0, 35.5, 19.1] List<List<Double>> 반환
+```
+- 컬렉션을 겹치지 않는 주어진 크기로 나누고 싶은 경우 chunked 함수를 사용할 수 있다
+```.kt
+val temperatures = listOf(27.7, 29.8, 22.0, 35.5, 19.1)
+temperature.chunked(2) // [27.7, 29.8] [22.0, 35.5] [19.1]
+```
+- 크기가 맞지 않는 경우 마지막 원소의 size는 chunked보다 작을 수 있다는 점에 유의하자
+
+### 1-10 컬렉션 합치기: zip
+- 서로다른 두 컬렉션을 pair로 합치고 싶은 경우 zip을 사용할 수 있다
+```.kt
+val names = listOf("Joe", "Mary", "Jamie")
+val ages = listOf(22, 31, 31, 44, 0)
+names.zip(ages) // [(Joe, 22), (Mary, 31), (Jamie, 31)] names의 원소의 개수가 더 적어 3개의 원소만 return
+names.zip(ages) { name, age -> Person(name, age) }
+```
+- zip 함수는 중위표기법을 쓸 수 있지만 람다를 전달할 수는 없다
+```.kt
+names zip age
+
+public infix fun <T, R> Iterable<T>.zip(other: Iterable<R>): List<Pair<T, R>> {
+    return zip(other) { t1, t2 -> t1 to t2 }
+}
+```
+
+### 1-11 내포된 컬렉션의 원소 처리: flatMap과 flatten
+```.kt
+data class Book(val title: String, val authors: List<String>)
+```
+- flatMap, flatten은 의미적으로 알 수 있듯이 컬렉션을 평평하게 만든다.
+```.kt
+val library = listOf(
+  Book("Kotlin in Action", listOf("Isakova", "Aigner"))
+  Book("Atomic Kotlin", listOf("Eckel", "Isakova")
+)
+```
+- 만약 라이브러리의 모든 저자를 계산하고 싶다면 map 함수를 사용하면 될것 같다
+```.kt
+library.map { it.authors } 
+```
+- 하지만 이 결과는 authors가 이미 List<String>이기 때문에 List<List<String>>이 된다
+- flatMap 함수를 사용하면 라이브러리의 모든 저자의 집합을 계산하되 추가적인 내포 없이 계산할 수 있다
+- flatMap은 map의 결과 List<List<String>>에서 각 요소를 모두 평평하게 만들어 List<String>으로 만든다
+- 만약 변환할 필요 없이 단순 List<List<T>>의 변수를 List<T>로 만들고 싶다면 flatten()함수를 사용하면 된다
+
+## 2. 지연 계산 컬렉션 연산: 시퀀스
+- 
