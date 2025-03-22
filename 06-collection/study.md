@@ -185,4 +185,31 @@ people.associateWith { it.age } // key = person, value = age가 되며 Map<Perso
 people.associateBy { it.age } // key = age, value = person이 되며 Map<Int, Person>
 ```
 - 다만 맵에서 key는 유일해야 한다. 이 함수들도 같은 키값을 여러개 사용한다면 마지막 결과가 덮어쓰여진다
-- 
+
+### 1.7 가변 컬렉션의 원소 변경: replaceAll, fill
+- 일반적으로 함수형 프로그래밍은 불변 컬렉션을 사용하는것을 권장하지만 가변 컬렉션을 사용해야하는 경우가 있다
+- 이런 경우에 대비해 가변 컬렉션에서 사용할 수 있는 replaceAll와 fill이 있다
+- replaceAll은 지정한 람다로 모든 컬렉션의 원소를 변경한다
+- fill은 지정한 파라미터로 모든 원소를 변경한다
+```.kt
+val names = listOf("Martin", "Samuel")
+names.replaceAll { it.uppercase() } // 모두 대문자로 변경 [MARTIN, SAMUEL]
+names.fill("change") // 모두 "change"로 변경 [change, change]
+```
+
+### 1.8 컬렉션의 특별한 경우 처리: ifEmpty
+- 컬렉션이 비어있지 않은 경우에만 어떤 처리를 하는게 필요한 경우가 있다
+- ifEmpty를 사용하면 아무 원소도 없을때 기본값을 생성하는 람다를 제공할 수 있다
+```.kt
+val empty = emptyList<String>()
+empty.ifEmpty { listOf("no", "values", "here" } // 리스트가 비어있으므로 람다의 결과 return
+```
+- 컬렉션은 아니지만 문자열에서 ifBlank라는 함수를 사용할 수 있다
+- 코틀린 문자열에서 empty는 정말로 아무런 문자를 가지고 있지 않은 빈 문자열을 의미하고
+- blank는 String에 공백 문자만 있는 경우에도 blank라고 판단한다
+```.kt
+val blankName = "    "
+blankName.ifBlank { "blank" } // 문자열이 공백만 있으므로 blank
+blankName.ifEmpty { "empty" } // 문자열이 완전히 비어있는것은 아니므로 그대로 blankName의 값
+```
+
