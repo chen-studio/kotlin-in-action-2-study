@@ -93,3 +93,35 @@ with(address) { // address는 이제 null이 아니다
   ...
 }
 ```
+
+## 1-6 예외를 발생시키지 않고 안전하게 타입을 캐스트하기: as?
+- 코틀린의 타입 캐스트 연산자인 as와 비슷하게 nullable 캐스트가 가능한 as?가 있다
+- 물론 as를 사용할때마다 is를 통해 as로 변환 가능한 타입인지 검사하는 방법도 있지만 as? 라는 좀 더 나은 솔루션이 존재한다
+- other as? Person => 캐스팅 가능한 경우 other as Person 수행, other !is Person인 경우 null
+```.kt
+class Person(val firstName: String, val lastName: String) {
+  override fun equals(o: Any?): Boolean {
+    val otherPerson = o as? Person ?: return false
+
+    return otherPerson.firstName == firstName && otherPerson.lastName == lastName
+  }
+}
+```
+
+## 1-7 널 아님 단언: !!
+- !!은 코틀린에서 널이 될 수 있는 타입의 값을 다룰 때 사용할 수 있는 도구 중에서 가장 단순하면서도 무딘 도구다
+- 느낌표를 이중으로 사용하면 어떤 값이든 널이 아닌 타입으로 바꿀 수 있다
+```.kt
+fun ignoreNulls(str: String?) {
+  val strNotNull: String = str!! // 널인 경우 NullPointerException 발생
+}
+```
+- !!는 컴파일러에게 나는 이 값이 null이 아님을 잘 알고 있다. 예외가 발생해도 감수하겠다 라고 말하는 것이다
+- !!에서 발생한 예외는 어떤 파일의 몇 번째 줄인지에 대한 정보는 들어있지만 어떤 식에서 예외가 발생했는지에 대한 정보는 들어있지 않다
+- 따라서 아래와 같이 사용하는 것을 피해야 한다
+```.kt
+person.company!!.address!!.country <- 이런식의 코드 작성은 피하자
+```
+- (개인적의견) 실제로 !! 보다는 별도의 에러 처리나 디버깅에 유용한 requireNotNull() 또는 checkNotNull()을 더 많이 사용한다
+- https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/require-not-null.html
+- https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/check-not-null.html
