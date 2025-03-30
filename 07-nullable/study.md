@@ -125,3 +125,78 @@ person.company!!.address!!.country <- 이런식의 코드 작성은 피하자
 - (개인적의견) 실제로 !! 보다는 별도의 에러 처리나 디버깅에 유용한 requireNotNull() 또는 checkNotNull()을 더 많이 사용한다
 - https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/require-not-null.html
 - https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/check-not-null.html
+
+## 1-8 let
+- let을 사용하면 널이 될 수 있는 식을 더 쉽게 다룰 수 있다
+- 예를들어 널이 될 수 있는 값을 널이 아닌 값만 인자로 받는 함수에 넘기고 싶을때 주로 사용한다
+```.kt
+fun sendEmailTo(email: String)
+
+fun main() {
+  val email: String? = "foo@bar.com"
+  sendEmailTo(email) // ERROR: Type mismatch
+
+  email?.let { email -> sendEmailTo(email) }
+  email?.let { sendEmailTo(it) }
+  email?.let(::sendEmailTo)
+}
+```
+
+## 1-9 직접 초기화하지 않는 널이 아닌 타입: 지연 초기화 프로퍼티
+- 객체를 일단 생성한 다음 나중에 전용 메서드를 통해 초기화하는 프레임워크가 많이 있다
+- 이 경우 매번 nullable타입으로 선언하고 초기값을 null로 설정하는 경우가 있다.
+- 하지만 이 값을 사용할때마다 null체크를 해야한다는 불편함이 있다
+```.kt
+class MyTest {
+  private var myService: MyService? = null
+
+  @BeforeAll
+  fun setUp() {
+    myService = MyService()
+  }
+
+  @Test
+  fun testAction() {
+    assertEquals(... myService!!.performAction()) // ?. 또는 !!로 널 체크를 해야함
+  }
+```
+- 이런 문제를 해결하기 위해 객체를 지연 초기화 하는 방법이 있다
+- lateinit var를 사용하면 객체를 나중에 초기화할 수 있다
+```.kt
+class MyTest {
+  private lateinit var myService: MyService
+
+  @BeforeAll
+  fun setUp() {
+    myService = MyService()
+  }
+
+  @Test
+  fun testAction() {
+    assertEquals(... myService.performAction()) // ?. 또는 !!로 널 체크 없이 사용가능
+  }
+```
+- 다만 프로퍼티 초기화 이전에 해당 변수에 접근하면 `UninitializedPropertyAccessException`이 발생한다
+- (추가) 해당 변수가 초기화되었는지를 확인할 수 있는 표준 함수도 존재한다
+```.kt
+if(::myService.isInitialized) {
+  ...
+}
+```
+
+## 1-10 안전한 호출 연산자 없이 타입 확장: 널이 될 수 있는 타입에 대한 확장
+- 널이 될 수 있는 타입에 대한 확장 함수를 정의하면 null값을 다루는 강력한 도구로 활용될 수 있다
+- 실제로 String? 타입의 수신 객체에 대해 호출할 수 있는 isEmptyOrNull이나 isBlankOrNull 메서드가 있다
+```.kt
+fun verifyUserInput(input: String?) {
+  if(input.isNullOrBlank()) {
+    ...
+  }
+}
+```
+- 안전한 호출(?.) 없이도 널이 될 수 있는 수신 객체 타입에 대해 선언된 확장 함수를 호출 가능하다
+```.kt
+input.isNullOrBlank() // 안전한 호출 없음
+
+fun String?.isNullOrBlank(): Boolean = this == null || this.isBlank()
+```
