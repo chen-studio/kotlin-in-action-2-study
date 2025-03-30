@@ -26,5 +26,70 @@ fun strLenSafe(s: String?) = ...
 ```
 - String? Any? MyCustomType등 어떤 타입이든 타입 이름 뒤에 물음표를 붙이면 그 타입의 변수나 프로퍼티에 null 참조를 저장할 수 있다
 - 어떤 널이 될 수 있는 타입의 값이 있다면 그 값에 대해 수행할 수 있는 연산의 종류가 제한된다.
+```.kt
+fun strLenSafe(s: String?) = s.length()
+// ERROR: only safe (?.) or non-null asserted(!!.) calls are allowed
+```
+- 널이 될 수 있는 값을 널이 될 수 없는 타입의 변수에 대입할 수 없다
+```.kt
+val x: String? = null
+var y: String = x // ERROR: Type mismatch
+```
+- 이렇게 여러 제약을 피하고 코드를 작성하는 방법은 현재 변수가 null인지 비교하는 것이다
+```.kt
+fun strLenSafe(s: String?): Int = if(s != null) s.length else 0
+```
+- 널이 될수 있는 값을 비교하는 방법이 if뿐이라면 코드가 매우 복잡해질 것이다. 아래에서 다른 방법을 알아보자
 
-  
+## 1-3 타입의 의미 자세히 살펴보기
+- (그리 와닿지 않는 내용 중략)
+- 자바의 String은 null과 String 두 종류의 값을 가질 수 있다
+- 이 두종류의 값은 완전히 다르다 심지어 자바의 instanceof 연산자도 null이 String이 아니라고 한다
+- 이는 자바의 타입 시스템이 null을 제대로 다루지 못한다는 것이다
+- 자바에도 @NotNull @Nullable의 annotation을 통해서 어느정도 null처리를 다루기도 한다
+
+## 1-4 안전한 호출 연산자로 null검사와 메서드 호출 합치기 :?.
+- 안전한 호출 연산자 `?.` 를 사용하면 null검사와 메서드 호출을 한번에 수행한다
+```.kt
+str?.uppercase()
+if(str != null) str.uppercase else null
+```
+- 안전한 호출 연산자를 사용한 결과 타입도 nullable 타입이라는 사실에 유의하자
+- 메서드 호출뿐 아니라 프로퍼티를 읽거나 쓸 때도 안전한 호출을 사용할 수 있다
+```.kt
+class Employee(val name: String, val manager: Employee?)
+fun managerName(employee: Employee): String? = employee.manager?.name
+```
+- 객체 그래프에서 널이 될 수 있는 중간 객체가 여럿 있다면 한 식 안에서 안전한 호출을 연쇄해서 사용하면 편하게 사용할 수 있다
+```.kt
+val country = company?.address?.country
+```
+
+## 1-5 엘비스 연산자로 null에 대한 기본값 제공: ?:
+- null인 경우 null 대신 사용할 기본값을 지정할때 사용할 수 있는 엘비스 연산자를 제공한다
+```.kt
+fun greet(name: String?) {
+  val recipient: String = name ?: "unnamed"
+}
+```
+- 이 연산자는 두가지 값을 받는데, 첫 번째 값이 null이 아니면 그 값이 전체의 결과이고 null이면 두번째 값이 결과이다
+- 안전한 호출 연산자와 엘비스 연산자를 함께 사용하면 좀 더 간결한 코드를 작성할 수 있다
+```.kt
+fun strLenSafe(s: String?): Int = s?.length ?: 0
+fun Person.countryName() = company?.address?.country ?: "Unknown"
+```
+- 코틀린에서는 return이나 throw등도 식이기 때문에 엘비스 연산자의 오른쪽에 return, throw등을 사용할 수 있어 편리하다
+- 이런 패턴은 함수의 전제조건을 검사하는 경우 유용하게 사용할 수 있다
+```.kt
+class Address(...)
+
+class Company(val name: String, val address: Address?)
+
+class Person(val name: String, val companyt: Company?)
+
+fun printShippingLabel(person: Person) {
+val address = person.company?.address ?: throw IllegalArgumentException("No address") // 주소가 없으면 예외 발생
+with(address) { // address는 이제 null이 아니다
+  ...
+}
+```
