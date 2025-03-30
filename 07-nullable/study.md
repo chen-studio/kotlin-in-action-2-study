@@ -200,3 +200,107 @@ input.isNullOrBlank() // 안전한 호출 없음
 
 fun String?.isNullOrBlank(): Boolean = this == null || this.isBlank()
 ```
+
+## 1-11 타입 파라미터의 널 가능성
+- 코틀린에서 함수나 클래스의 모든 타입 파라미터는 기본적으로 null이 될 수 있다
+```.kt
+fun <T> printHashCode(t: T) {
+  println(t?.hashCode()) // t가 널이 될 수 있으므로 안전한 호출을 써야함
+}
+
+fun main() {
+  printHashCode(null) // T의 타입은 Any?로 추론됨
+}
+```
+- 타입 파라미터에 null을 허용하고 싶지 않다면 upper bound를 지정해야 한다
+```.kt
+fun <T: Any> printHashCode(t: T) {
+  println(t.hashCode())
+}
+fun main() {
+  printHashCode(null) // ERROR
+}
+```
+
+## 1-12 널 가능성과 자바
+- 자바와 코틀린은 상호 운용 가능한 언어지만 자바는 nullable을 지원하지 않는다.
+- 이런것들이 가능한 이유는 자바는 @Nullable, @NotNull등의 어노테이션을 사용할 수 있다
+- @Nullable + Type = Type?
+- @NotNull + Type = Type
+- 코틀린은 javax.annotation, android.support.annotation, org.jetbrains.annotations등의 어노테이션으로 자바의 nullable타입을 제어한다
+- 이런 어노테이션이 없는 경우는 `플랫폼타입` 이 된다
+
+## 1-13 플랫폼타입
+- 코틀린에서 자바를 사용할때 타입이 null인지 아닌지 알 수 없는 경우, 느낌표가 붙은 타입인 플랫폼 타입이 된다(Type!)
+- 어떤 플랫폼 타입의 값이 널이 될 수도 있음을 알고 있다면 그 값을 사용하기 전에 null인지 검사할 수 있다
+- 만약 널이 아님을 알고 있다면 null검사없이 직접 사용해도 되지만 null인 경우 NPE가 발생할 수 있다
+```.java
+public class Person {
+  private final String name;
+
+  public Person(String name) {
+    this.name = name;
+  }
+
+  public String getName() {
+    return name;
+  }
+}
+```
+
+```.kt
+fun yellAt(person: Person) {
+  println(person.name.uppercase() + "!!!")
+}
+
+fun main() {
+  yellAt(Person(null)) // NPE 발생
+}
+```
+
+```.kt
+fun yellAt(person: Person) {
+  println((person.name ?: "AnyOne").uppercase() + "!!!") // 정상 동작
+}
+
+fun main() {
+  yellAt(Person(null)) // NPE 발생 X,
+  // ANYONE!!!
+}
+```
+- 코틀린이 이처럼 플랫폼 타입을 도입한 이유는
+- 모든 자바 타입을 nullable로 다룰 수 있지만 매번 null 검사를 처리해야 한다는 불편함이 있다
+- 이 문제는 제네릭에서 더 드러나는데 자바의 ArrayList<String>을 코틀린에서 ArrayList<String?>? 처럼 다루면 사용이 매우 까다로워진다
+- 따라서 이 값이 null인지 아닌지 알수 없음을 알려주는 플랫폼 타입을 도입하되 프로그래머에게 그 책임을 부여하는 실용적인 접근방법을 선택했다
+- 플랫폼 타입은 직접 선언할 순 없지만 컴파일러 오류 메시지에서 종종 볼 수 있다
+```.kt
+val i: Int = person.name
+// ERROR: Type mismatch: inffered type is String! but Int was expected
+```
+- 플랫폼 타입은 nullable로 다룰 수도 있고 notnull로도 다룰 수 있다
+```.kt
+val s: String? = person.name
+val s1: String = person.name
+```
+
+## 1-14 상속
+- 코틀린에서 자바 메서드를 오버라이딩 할때 그 메서드의 파라미터와 반환 타입을 nullable로 선언할지 not null로 선언할지 결정해야 한다
+```.java
+interface StringProcessor {
+  void process(String value);
+}
+```
+```.kt
+class StringPrinter: StringProcessor {
+  override fun process(value: String) {
+    println(value)
+  }
+}
+
+class NullableStringPrinter: StringProcessor {
+  override fun process(value: String?) {
+    if(value != null) println(value)
+  }
+}
+```
+- 상황에 맞게 사용
