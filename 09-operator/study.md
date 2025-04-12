@@ -449,3 +449,41 @@ class Person(val name: String) {
 }
 ```
 - lazy 함수는 코틀린 관례에 맞는 시그니처의 getValue 메서드가 들어있는 객체를 반환한다.
+- 참고로 lazy는 아ㅐ와 같이 구성됨
+```.kt
+public actual fun <T> lazy(mode: LazyThreadSafetyMode, initializer: () -> T): Lazy<T> =
+    when (mode) {
+        LazyThreadSafetyMode.SYNCHRONIZED -> SynchronizedLazyImpl(initializer)
+        LazyThreadSafetyMode.PUBLICATION -> SafePublicationLazyImpl(initializer)
+        LazyThreadSafetyMode.NONE -> UnsafeLazyImpl(initializer)
+    }
+
+public actual fun <T> lazy(initializer: () -> T): Lazy<T> = SynchronizedLazyImpl(initializer)
+
+private class SynchronizedLazyImpl<out T>(initializer: () -> T, lock: Any? = null) : Lazy<T>, Serializable {
+    private var initializer: (() -> T)? = initializer
+    @Volatile private var _value: Any? = UNINITIALIZED_VALUE
+    // final field is required to enable safe publication of constructed instance
+    private val lock = lock ?: this
+
+    override val value: T
+        get() {
+            val _v1 = _value
+            if (_v1 !== UNINITIALIZED_VALUE) {
+                @Suppress("UNCHECKED_CAST")
+                return _v1 as T
+            }
+
+            return synchronized(lock) {
+                val _v2 = _value
+                if (_v2 !== UNINITIALIZED_VALUE) {
+                    @Suppress("UNCHECKED_CAST") (_v2 as T)
+                } else {
+                    val typedValue = initializer!!()
+                    _value = typedValue
+                    initializer = null
+                    typedValue
+                }
+            }
+        }
+```
