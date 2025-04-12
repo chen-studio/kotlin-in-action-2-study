@@ -229,4 +229,77 @@ fun main() {
 }
 ```
 - get의 파라미터로 Int가 아닌 타입도 사용할 수 있으며 2차원 행렬 객체를 생각해보면 get의 파라미터로 여러개의 파라미터도 사용할 수 있다
+- set 연산자도 살펴보자
+```.kt
+data class MutablePoint(var x: Int, var y: Int)
+
+operator fun MutablePoint.set(index: Int, value: Int) {
+    when(index) {
+        0 -> x = value
+        1 -> y = value
+        else -> throw ...
+    }
+}
+
+val p = MutablePoint(10, 20)
+p[1] = 42
+println(p) // MutablePoint(x=10, y=42)
+```
+
+### 3-2 in
+- 어떤 객체가 컬렉션에 들어가 있는지를 확인하려면 in을 사용한다
+- 이에 대응하는 연산 함수는 contains이다
+```.kt
+data class Rectangle(val upperLeft: Pont, val lowerRight): Point)
+
+operator fun Rectangle.contains(p: Point): Boolean {
+    return p.x in upperLeft.x..<lowerRight.x &&
+        p.y in upperLeft.y..<lowerRight.y
+}
+```
+- (개인) ..(닫힌 범위) 과 ..<(열린 범위) 가 있는데, ..<는 거의 사용해본적이 없고 until을 많이 사용했음 (1 until 3)
+- a in c ==> c.contains(a)
+- 10..20 은 10<=target<=20
+- 10 until 20 (또는 10..<20) 은 10<=target<20
+
+### 3-3 객체로부터 범위 만들기: rangeTo, rangeUntil
+- start..end 는 start.rangeTo(end) 로 컴파일 되나
+- 이 연산자도 새로 정의할 수 있지만 Comprable 인터페이스에는 rangeTo가 이미 정의되어 있다
+```.kt
+operator fun<T: Comparable<T>> T.rangeTo(that: T): ClosedRange<T>
+```
+- rangeTo는 함수의 범위를 반환하며 어떤 원소가 그 범위 안에 들어있는지 검사할 수 있게 해준다
+- 다만 0..n.forEach {} 는 범위 연산자의 우선순위가 낮아 컴파일되지 않으므로 괄호를 포함해야 한다
+- (0..n).forEach {}
+
+### 3-4 자신의 타입에 대해 루프 수행: iterator
+- 코틀린의 for 루프는 in 연산자를 사용한다 `for(x in list) { ... }
+- 내부적으로는 list.iterator()를 호출해서 자바와 마찬가지로 hasNext와 next 호출을 반복한다
+- 하지만 이 또한 관례이므로 iterator 메서드를 확장함수로 정의할 수 있으며 이런 성질로 인해 자바 문자열에 대한 for 루프가 가능하다
+- 코틀린 표준 라이브러리는 String의 상위 클래스인 CharSequence에 대한 iterator 확장함수를 제공한다
+```.kt
+operator fun CharSequence.iterator(): CharIterator
+for(c in "abc") { }
+```
+- 마찬가지로 클래스 안에 itrator 메서드를 구현하거나 확장함수로 만들 수 있다
+```.kt
+operator fun ClosedRange<LocalDate>.iterator(): Iterator<LocalDate> =
+    object: Iterator<LocalDate> {
+        var current = start
+        override fun hasNext() = current <= endInclusive
+
+        override fun next(): LocalDate {
+            val thisDate = current
+            current = current.plusDays(1)
+            return thisDate
+        }
+    }
+```
+
+## 4. component 함수를 사용해 구조 분해 선언 제공
+```.kt
+val p = Point(10, 20)
+val (x, y) = p
+```
+- 일반 선언과 비슷해보지만 =의 왼쪽을 괄호로 묶었다
 - 
