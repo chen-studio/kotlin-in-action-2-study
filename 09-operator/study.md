@@ -302,4 +302,150 @@ val p = Point(10, 20)
 val (x, y) = p
 ```
 - 일반 선언과 비슷해보지만 =의 왼쪽을 괄호로 묶었다
-- 
+- 이것을 destructing declaration(구조 분해 선언) 이라고 한다
+- 내부적으로 componentN 이라는 함수를 호출한다
+- `val (a, b) = p` => `val a = p.component1()` `val b = p.component2()`
+- data class의 경우 생성자의 프로퍼티에 한해 컴파일러가 componentN 함수를 구현해 준다
+- 일반 클래스에서 아래와 같이 직접 구현할 수 있다
+```.kt
+class Point(val x: Int, val y: Int) {
+    operator fun component1() = x
+    operator fun component2() = y
+}
+```
+- 무한히 componentN을 선언할 수 없지만 destructing declaration은 유용하게 사용할 수 있다
+- 코틀린 표준 라이브러리에서 컬렉션의 맨 앞의 다섯 원소에 대한 componentN을 제공한다
+- 컬렉션 예시
+```.kt
+val (n, m) = readLine().split(" ") // 최대 5개까지 가능
+```
+- 가장 단순한 방법은 Pair, Triple 클래스를 사용하는 것이지만 그 안에 담겨있는 의미를 알 수 없다는 단점이 있다
+
+### 4-1 구조 분해 선언과 루프
+- 함수 본문 내 선언문뿐 아니라 변수 선언이 들어갈 수 장소라면 어디든 사용할 수  ㅣㅆ다
+```.kt
+fun printEntries(map: Map<String, String>) {
+    for((key, value) in map) {
+        println("$key -> $value")
+    }
+}
+
+fun main() {
+    val map = mapOf("Oracle" to "Java", "JetBrains" to "Kotlin")
+    printEntries(map)
+}
+```
+- 실제 코드는 아래와 같이 컴파일된다
+```.kt
+for (entry in map.entries) {
+    val key = entry.component1()
+    val value = entry.component2()
+    ...
+}
+```
+- 람다가 data class나 맵 같은 복합적인 값을 파라미터로 받을 때도 구조 분해 선언을 쓸 수 있다
+```.kt
+map.forEach { (key, value) ->
+    println("$key -> $value")
+}
+```
+
+### 4-2 문자를 사용해 구조 분해 값 무시
+```.kt
+data class Person(
+    val firstName: String,
+    val lastName: String,
+    val age: Int,
+    val city: String
+)
+```
+- city(마지막 프로퍼티)를 제외한 3개의 프로퍼티만 필요한 경우
+```.kt
+val (firstName, lastName, age) = p
+```
+- 중간 프로퍼티가 필요 없는 경우
+```.kt
+val (firstName, _, age) = p
+```
+- 구조분해는 순서에 따라 동작하기 때문에 변수명을 잘 지정해야 한다
+```.kt
+val (lastName, firstName, age, city) = p // lastName과 firstName이 잘못 지정됨
+```
+
+## 5. 프로퍼티 접근자 로직 재활용: 위임 프로퍼티 (by delegate 패턴)
+- 위임은 객체가 직접 작업을 수행하지 않고 다른 도우미 객체가 그 작업을 처리하도록 맡기는 디자인 패턴을 말한다
+- 이때 작업을 처리하는 도우미 객체를 delegate object(위임 객체)라고 한다
+
+### 5-1 위임 프로퍼티의 기본 문법과 내부 동작
+- 기본적인 문법은 아래와 같음
+```.kt
+var p: Type by Delegate()
+```
+- p 프로퍼티는 접근자 로직을 다른 객체에 위임한다
+- 컴파일러는 숨겨진 도우미 프로퍼티를 만들고 그 프로퍼티를 위임 객체의 인스턴스로 초기화한다.
+```.kt
+class Foo {
+    var p: Type by Delegate()
+}
+
+class Foo {
+    private val delegate = Delegate()
+
+    var p: Type
+        set(value: Type) = delegate.setValue(/* ... */, value) 
+        get() = delegate.getValue(/* ... */)
+}
+```
+- 프로퍼티 위임 관례에 따라 Delegate 클래스는 getValue와 setValue 메서드를 제공해야 한다
+- 또한 객체 최초 생성시 검증 로직을 수행하거나 위임이 인스턴스화 되는 방식을 제어하려면 선택적으로 `provideDelegate` 함수를 구현할 수 있다
+```.kt
+class Delegate {
+    operator fun getValue(...) { ... }
+    operator fun setValue(..., value: Type) { ... }
+    operator fun provideDelegate(...): Delegate {...} // 위임 객체 생성 또는 제공하는 로직 담당
+}
+
+class Foo {
+    var p: Type by Delegate()
+}
+
+fun main() {
+    val foo = Foo() // 위임 프로퍼티는 있는 타입의 객체를 생성하는데, 위임 객체에 provideDelegate가 있으면 그 함수를 호출해 위임 객체를 생성
+    val oldValue = foo.p // delegate.getValue 호출
+    foo.p = newValue // delegate.setValue 호출
+}
+```
+
+### 5-2 위임 프로퍼티 사용: by lazy()를 사용한 지연 초기화
+- 지연 초기화는 객체의 일부분을 초기화 하지  않고 남겨뒀다가 실제로 그 부분의 값이 필요한 경우 초기화할때 쓰이는 패턴이다
+- 예시로 Email이라는 클래스가 있고 데이터베이스에서 이메일을 가져오는 loadEmail함수가 있다
+```.kt
+class Email { ... }
+fun loadEmails(person: Person): List<Email> {
+    println("${person.name}의 이메일을 가져옴")
+    return listOf(...)
+}
+```
+- 이메일을 불러오기 전에는 null을 저장하고 불러온 다음에는 이메일 리스트를 저장하는 _emails 프로퍼티를  추가헤서 지연 초기화를 직접 구현한 예시를 보자
+```.kt
+class Person(val name: String) {
+    private var _emails: List<Email>? = null
+
+    val emails: List<Email>
+        get() {
+            if (_emails == null) {
+                _emials = loadEmails(this)
+            }
+            return _emails!!    
+        }
+}
+```
+- 여기서 backing property 라는 기법을 사용한다. 변경 가능한 프로퍼티는 _를 포함하고 포함하지 않는 프로퍼티는 읽기 전용 프로퍼티로 사용한다
+- 하지만 위 코드는 쓰레드 동기화에 안전하지 않으며 매번 이렇게 구현하는 것은 매우 번거롭다
+- by lazy를 사용하면 쉽게 구현할 수 있다
+```.kt
+class Person(val name: String) {
+    val emails by lazy { loadEmails(this) }
+}
+```
+- lazy 함수는 코틀린 관례에 맞는 시그니처의 getValue 메서드가 들어있는 객체를 반환한다.
