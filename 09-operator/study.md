@@ -449,7 +449,7 @@ class Person(val name: String) {
 }
 ```
 - lazy 함수는 코틀린 관례에 맞는 시그니처의 getValue 메서드가 들어있는 객체를 반환한다.
-- 참고로 lazy는 아ㅐ와 같이 구성됨
+- 참고로 lazy는 아래와 같이 구성됨
 ```.kt
 public actual fun <T> lazy(mode: LazyThreadSafetyMode, initializer: () -> T): Lazy<T> =
     when (mode) {
@@ -486,4 +486,162 @@ private class SynchronizedLazyImpl<out T>(initializer: () -> T, lock: Any? = nul
                 }
             }
         }
+```
+
+### 5-2 위임 프로퍼티 구현
+- 위임 프로퍼티를 구현하기 위한 예제
+- 객체의 프로퍼티가 변경될때마다 리스너에게 변경 통지를 하고 싶은 상황
+- 이런 경우를 Observable 이라고 한다
+```.kt
+fun interface Observer {
+    fun onChanged(name: String, oldValue: Any?, newValue: Any?)
+}
+
+open class Observable {
+    val observers = mutableListOf<Observer>()
+    fun notifyObservers(propName: string, oldValue: Any?, newValue: Any?) {
+        for(obs in observers) {
+            obs.onChange(propName, oldValue, newValue)
+        }
+    }
+}
+
+class Person(val name: String, age: Int, salary: Int): Observable() {
+    var age: Int = age
+        set(newValue) {
+            val oldValue = field
+            field = newValue
+            notifyObservers(
+                "age", oldValue, newValue
+            )
+        }
+
+    var salary: Int = salary
+        set(newValue) {
+            val oldValue = field
+            field = newValue
+            notifyObservers(
+                "salary", oldValue, newValue
+            )
+        }
+}
+
+fun main() {
+    val p = Person("Seb", 28, 1000)
+    p.observers += Observer { propName, oldValue, newValue ->
+        println(
+            """    
+            Property $propName changed from $oldValue to $newValue
+            """
+        )
+    }
+    p.age = 29
+    //  Property age changed from 28 to 29!
+    p.salary = 1500
+    // Property salary changed from 1000 to 1500!
+}
+```
+- property에 대한 반복되는 get, set 메서드를 ObservableProperty라는 클래스를 정의하여 중복을 제거해보자
+```.kt
+class ObservableProperty(
+    val propName: String,
+    var propValue: Int,
+    val observable: Observable
+) {
+    fun getValue(): Int = propName
+    fun setValue(newValue: Int) {
+        val oldValue = propValue
+        propValue = newValue
+        observable.notifyObservers(propName, oldValue, newValue)
+    }
+}
+
+class Person(val name: String, age: Int, salary: Int): Observable() {
+    val _age = ObservableProperty("age", age, this)
+    var age: Int
+        get() = _age.getValue()
+        set(newValue) {
+            _age.setValue(newValue)
+        }
+
+    val _salary = ObservableProperty("salary", salary, this)
+    var salary: Int
+        get() = _salary.getValue()
+        set(newValue) {
+            _salary.setValue(newValue)
+        }
+}
+```
+
+- 코틀린의 위임이 실제로 작동하는 방식과 비슷하게 구현한 예시이다.
+- 값이 바뀌면 자동으로 옵저버에게 변경 통지를 해주고 있다
+- 이제 ObservableProperty를 delegate 패턴을 사용하여 구현해보자.
+```.kt
+imort kotlin.reflect.KProperty
+
+class ObservableProperty(
+    var propValue: Int,
+    val observable: Observable
+) {
+    operator fun getValue(thisRef: Any?, prop: KProperty<*>): Int = propValue
+    operator fun setValue(thisRef: Any?, prop: KProperty<*>, newValue: Int) {
+        val oldValue = propValue
+        propValue = newValue
+        observable.notifyObservers(prop.name, oldValue, newValue
+    }
+}
+```
+- 관례에 따라 getValue, setValue에 operator가 붙는다
+- 두 함수 getValue, setValue는 파라미터를 2개 받는다
+- 설정하거나 읽을 프로퍼티를 나타내는 인스턴스(thisRef)와 Kotlin Reflection Property인 KProperty를 받는다
+- 지금은 KProperty 객체를 통해 property의 name을 가져올 수 있다는 점만 기억하자
+- KProperty를 통해 프로퍼티 이름을 전달받으므로 생성자에서 propName을 없앴다
+```.kt
+class Person(val name: String, age: Int, salary: Int): Observable() {
+    var age by ObservableProperty(age, this)
+    var salary by ObservableProperty(salary, this)
+}
+```
+- by 오른쪽의 객체를 위임 객체라고 부르며
+- 실제로 해당 프로퍼티에 접근할때 위임 객체의 setValue와 getValue가 호출된다
+- 하지만 이렇게 직접 구현하지 않아도 코틀린 표준 라이브러리에서 Delegates Singleton 객체를 제공한다
+
+- https://cs.android.com/android-studio/kotlin/+/master:libraries/stdlib/src/kotlin/properties/Delegates.kt;l=13?q=Delegates&sq=
+- Delegates.notNull => notnull로 제한, lateinit과 유사하지만 성능이 좋지 않아 잘 사용하지 않음
+- Delegates.observable => 값이 변경될때마다 수행할 로직 작성 가능
+- Delegates.vetoable => observable과 유사하지만 리턴값이 Unit인 observable과 달리 람다의 리턴값이 Boolean이며 해당 로직이 true일때만 값이 set된다
+- Delegates.observable 사용 예시
+```.kt
+class Person(...) {
+    var age by Delegates.observable(age) { property: KProperty<*>, oldValue: Any?, newValue: Any? ->
+        //값이 변경될때마다 수행할 원하는 로직 작성
+    }
+    var age by Delegates.vetoable(age) { property: KProperty<*>, oldValue: Any?, newValue: Any? ->
+        //값이 변경될때마다 수행할 원하는 로직 작성
+        age % 2 == 0 // age가 짝수일때만 setValue가 수행됨, 이외에는 무시
+    }
+    var age by Delegates.notNull<Int> // 나중에 값 초기화 가능, null 불가능
+}
+```
+***참고 ReadWriteProperty***
+- operator fun setValue, getValue를 직접 정의해도 되지만 컴파일러 또는 IDE가 이를 자동으로 완성해주지 않아 불편한데, ReadWriteProperty라는 인터페이스를 상속받는 방법이 있다
+- ReadWriteProperty에 operator fun setValue, getValue가 정의되어 있다
+- ProvideDelegateProvider를 상속받아 provideDelegate를 override 할 수 있다
+- https://cs.android.com/android-studio/kotlin/+/master:libraries/stdlib/src/kotlin/properties/Interfaces.kt;l=38?q=ReadWriteProperty
+- 실제로 사용하면 아래처럼 override를 통해 구현할 수 있다
+
+```.kt
+class Holder<T: Any>: ReadWriteProperty<Any?, T?>, PropertyDelegateProvider<Any?, T?> {
+    override fun getValue(thisRef: Any?, property: KProperty<*>): T? {
+        TODO("Not yet implemented")
+    }
+
+    override fun setValue(thisRef: Any?, property: KProperty<*>, value: T?) {
+        TODO("Not yet implemented")
+    }
+
+    override fun provideDelegate(thisRef: Any?, property: KProperty<*>): T? {
+        TODO("Not yet implemented")
+    }
+}
 ```
