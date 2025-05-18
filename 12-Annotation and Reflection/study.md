@@ -30,4 +30,110 @@ fun remove(index: Int) { ... }
 - 예를들어 직렬화 라이브러리는 @DeserializeInterface(CompanyImpl::class)처럼 역직렬화 과정에서 쓰이는 구현과 인터페이스를 연결하기 위해 클래스를 받는 어노테이션을 제공할 수 있다
 - `다른 어노테이션을 인자로 지정`: 인자로 들어가는 어노테이션의 이름 앞에 @를 넣지 말라
 - 예를들어 방금 살펴본 예시의 ReplaceWith앞에 @를 사용하지 않는다
-- `배열을 인자로 지정`: 
+- `배열을 인자로 지정`: @RequestMapping(path = ["/foo", "/bar"])처럼 각괄호를 사용한다
+- 대신 배열을 지정하기 위해 arrayOf 함수를 사용할 수도 있다
+- 어노테이션 인자는 컴파일 시점에 알 수 있어야 한다
+- 따라서 프로퍼티를 어노테이션 인자로 사용하려면 const 변경자를 붙여야한다
+```.kt
+const val TEST_TIMEOUT = 10L
+
+class MyTest {
+  @Test
+  @Timeout(TEST_TIMEOUT)
+  fun testMethod() {...}
+}
+```
+
+### 1.2 어노테이션 참조 범위 지정: Annotation Target
+- 이 어노테이션을 붙일 요소를 지정하는 방법이 있다
+- 사용 지점 타깃은 @기호와 어노테이션 이름 사이에 붙으며 어노테이션 이름과는 콜론으로 구분된다
+- 예를들어 get이라는 단어는 @JvmName 어노테이션을 프로퍼티게터에 이용하라는 뜻이다
+```.kt
+@get:JvmName("obtainCertificate")
+@set:JvmName("putCertificate")
+var certificate: String  "..."
+
+// performCalculation 으로 자바에서 호출이 가능하도록 함
+@JvmName("performCalculation")
+fun calculate(): Int {
+  return (2 + 2) - 1
+}
+```
+
+in java
+```.java
+class Foo {
+  public static void main(String[] args) {
+    var certManager = new CertificateManager();
+    var cert = certManager.obtainCertification();
+    certManager.putCertificate("...")
+  }
+}
+```
+- 사용 지점 타깃 목록
+- property: 프로퍼티 전체(자바에서 선언된 어노테이션에는 사용 불가)
+- field: 프로퍼티에 의해 생성되는 필드
+- get: 프로퍼티 게터
+- set: 프로퍼티 세터
+- receiver: 확장 함수나 프로퍼티의 수신 객체 파라미터
+- param: 생성자 파라미터
+- setparam: 세터 파라미터
+- delegate: 위임 프로퍼티의 위임 인스턴스를 담아둔 필드
+- file: 파일 안에 선언된 최상위 함수와 프로퍼티를 담아두는 클래스
+- 클래스 또는 함수 선언이나 타입만 사용할 수 있는 자바와 달리 코틀린에서는 어노테이션 인자로 클래스 또는 함수 선언이나 타입 외에 임의의 식을 허용한다
+- 예를들어 컴파일러의 경고를 무시하도록 하는 @Suppress가 있다
+
+#### 자바 API를 어노테이션으로 제어하기
+- 코틀린에선 코틀린을 자바 바이트 코드로 컴파일하는 방법과 코틀린 선언을 자바에 노출하는 방법을 제어하기 위한 어노테이션을 많이 제공한다
+- 예들들어 자바의 volatile 키워드 대신 @Volatile 어노테이션을 사용한다
+- @JvmName은 자바 필드나 메서드 이름을 변경
+- @JvmStatic 객체 선언이나 동반 객체의 메서드에 적용하면 메서드가 자바 정적 메서드로 노출
+- @JvmOverloads 디폴트 파라미터가 있는 함수에 대해 컴파일러가 자동으로 오버로딩된 함수 생성
+- @JvmField 대상 프로퍼티를 게터나 세터가 없는 공개된 자바 필드로 노출
+- @JvmRecord data class에 사용하면 자바 레코드 클래스 선언
+
+### 1-3. 어노테이션을 활용해 JSON 직렬화 제어
+- 제이키드에 대한 설명
+
+### 1-4. 어노테이션 선언
+- 코틀린
+```.kt
+annotation class JsonExclude
+
+annotation class JsonName(val name: String)
+```
+- 자바
+```.java
+public @interface JsonName {
+  String value();
+}
+```
+- 자바 어노테이션에는 value라는 메서드가 있다는 점을 기억하고 코틀린에서는 name이라는 프로퍼티를 기억하라
+- 자바에서 value를 제외한 모든 애트리뷰트에는 이름을 명시해야 한다
+- 코틀린에서는 일반적인 생성자 호출과 동일하다
+- 자바에서 선언한 어노테이션을 코틀린에서 사용할떈 value를 제외한 모든 인자에 대해 이름 붙은 인자 구문을 사용해야 한다
+
+### 1-5. 메타어노테이션: 어노테이셔을 처리하는 방법 제어
+- 코틀린의 클래스에도 어노테이션을 붙일 수 있으며 어노테이션 클래스에 붙일 수 있는 어노테이션을 `메타 어노테이션` 이라고 부른다
+- 가장 흔한 것은 @Target이다
+```.kt
+@Target(AnnotationTarget.PROPERTY)
+annotation class JsonExclude
+```
+- 예시로 사용한 제이키드 어노테이션의 경우 프로퍼티 어노테이션만 사용하므로 @Target을 꼭 지정해야 한다. 만약 지정하지 않으면 모든 선언에 적용할 수 있다
+- @Target(AnnotationTarget.CLASS, AnnotationTarget.METHOD) 처럼 여러개 지정할 수도 있다
+- 메타 어노테이션을 직접 만들어야 한다면 ANNOTATION_CLASS를 타깃으로 지정하자
+```.kt
+@Target(AnnotationTarget.ANNOTATION_CLASS)
+annotation class BindingAnnotation
+
+@BindingAnnotation
+annotation class MyBinding
+```
+- target을 PROPERTY로 지정한 어노테이션을 자바 코드에서는 사용할 수 없다
+- 자바에선 그런 어노테이션을 사용하려면 AnnotationTarget.FIELD를 두 번째 타깃으로 추가해야 한다
+#### @Retention
+- retention은 어노테이션 클래스를 소스 수준에서만 유지할지 .class 파일에 저장할지 런타임에서 리플렉션을 통해 접근할 수 있게 할건지 지정하는 방법이다
+- 필요한 scope 까지만 지정하면 좋다
+
+### 1-6. 어노테이션 파라미터로 클래스 사용 
