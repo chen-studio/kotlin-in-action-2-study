@@ -137,3 +137,28 @@ annotation class MyBinding
 - 필요한 scope 까지만 지정하면 좋다
 
 ### 1-6. 어노테이션 파라미터로 클래스 사용 
+```.kt
+interface Company {
+  val name: String
+}
+
+data class CompanyImpl(override val name: String): Company
+
+data class Person(
+  val name: String,
+  @DeserializeInterface(CompanyImpl::class) val company: Company
+)
+
+annotation class DeserializeInterface(val targetClass: KClass<out Any>)
+```
+
+- Company::class 타입은 KClass<CompanyImpl>이며 이 타입은 방금 살펴본 DeserializeInterface의 파라미터 타입인 KClass<out Any>의 하위 타입이다
+- out (공변) 을 선언해야 CompanyImpl::class를 인자로 넘길 수 있다
+
+### 1-7 어노테이션 파라미터로 제네릭 클래스 받기
+- 너무 영양가가 없어 예시를 쓰진 않았지만.. 스타 프로젝션을 사용하면 됩니다
+```.kt
+annotation class CustomSerializer(
+  val serializerClass: KClass<out ValueSerializer<*>>
+)
+```
