@@ -162,3 +162,75 @@ annotation class CustomSerializer(
   val serializerClass: KClass<out ValueSerializer<*>>
 )
 ```
+
+## 2. Reflection
+- 런타임에 객체의 프로퍼티와 메서드에 접근할 수 있게 해주는 방법
+- 코틀린 리플렉션을 다루려면 코틀린 리플렉션 kotlin.reflect와 kotlin.reflect.full 패키지의 코틀린 리플렉션 API를 사용하면 된다
+
+### 2-1 KClass, KCallable, KFunction, KProperty
+- 코틀린 리플렉션 클래스는 KClass 타입으로 표현된다
+```.kt
+class Person(val name: String, val age: Int)
+
+fun main() {
+  val person = Person("Alice", 29)
+  val kClass = person:class
+  println(kClass.simpleName)
+  // Person
+  kClass.memberProperties.forEach { println(it.name) }
+  // age
+  // name  
+}
+```
+in KClass
+```.kt
+interface KClass<T : Any> {
+  val simpleName: String?
+  val qualifiedName: String?
+  val members: Collection<KCallable<*>>
+  val constructors: Collection<KFunction<T>>
+  val nestedClasses: Collection<KClass<*>>
+  ...
+}
+```
+- simpleName과 qualifiedName이 nullable인 이유는 익명 객체 사용 시 해당 값이 null이기 때문이다
+- KCallable은 함수와 프로퍼티를 아우르는 공통 상위 인터페이스이다
+- KCallable의 call을 사용하면 함수나 프로퍼티의 게터를 호출할 수 있다
+```.kt
+interface KCallable<out R> {
+  fun call(vararg args: Any?): R
+  //...
+}
+
+fun foo(x: Int) = println(x)
+
+fun main() {
+  val kFunction = ::foo
+  kFunction.call(42) // 42
+}
+```
+- KCallabale은 vararg 리스트를 파라미터로 받고 실제 그 함수의 파라미터를 정확히 파라미터로 전달해야 한다
+- 예를들어 파라미터 1개를 받는 KFunction의 call 함수에 2개의 파라미터를 넣어 호출하면 IllegalArgumentException이 발생한다
+- 파라미터의 개수를 나타내는 더 구체적인 KFunction1, KFunction2 등을 사용할 수도 있다
+```.kt
+fun sum(x: Int, y: Int) = x + y
+
+fun main() {
+  val kFunction: KFunction2<Int, Int, Int> = ::sum
+  println(kFunction.invoke(1, 2) + kFunction(3, 4)) // 10
+  kFunction(1) // ERROR: No value passed for parameter p2
+}
+```
+- KFunction에 대해 call이 아니라 invoke 메서드를 호출할때는 인자 개수나 타입을 틀릴 수 없다 (컴파일 X)
+- KProperty도 call을 호출할 수 있으며 이는 getter를 호출한다
+- 하지만 프로퍼티 인터페이스는 더 좋은 방법으로 get 메서드를 제공한다
+- get 메서드를 사용하려면 프로퍼티가 선언된 방법에 따라 올바른 인터페이스를 사용해야 한다
+- 최상위 읽기 전용과 가변 프로퍼티는 각각 KProperty0나 KMutableProperty0 인터페이스의 인스턴스로 표현되며
+- 둘 다 인자가 없는 get 메서드를 제공한다
+```.kt
+var counter = 0
+fun main() {
+  val kProperty = ::counter
+  kProperty.setter.call(21)
+}
+```
