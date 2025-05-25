@@ -276,3 +276,100 @@ private fun StringBuilder.serializeObject(obj: Any) {
 ```.kt
 val properties = kClass.memberProperties.filter { it.findAnnotation<JsonExclude>() == null }
 ```
+
+```.kt
+private fun StringBuilder.serializeObject(obj: Any) {
+  (obj::class as KClass<Any>)
+     .memberProperties
+     .filter { it.findAnnotation<JsonExclude>() == null
+     .joinToStringBuilder(this, prefix = "{", postfix = "}") {
+       serializeProperty(it, obj)
+    }
+}
+
+private fun StringBuilder.serializeProperty(
+   prop: KProperty1<Any, *>, obj: Any
+) {
+  val jsonNameAnn = prop.findAnnotation<JsonName>()
+  val propName = jsonNAmeAnn?.name ?: prop.name
+  serializeString(propName)
+  append(": ")
+  serializePropertyValue(prop.get(obj))
+}
+```
+
+- custom serializer
+```.kt
+data class Person(
+  val name: String,
+  @CustomSerializer(DateSerializer::class) val birthDate: Date
+)
+
+annotation class CustomSerializer(
+  val serializerClass: KClass<out ValueSerializer<*>>
+)
+
+fun KProperty<*>.getSerializer(): ValueSerializer<Any?>? {
+  val customSerializerAnn = findAnnotation<CustomSerializer>() ?: return null
+  val serializerClass = customSerializerAnn.serializerClass
+  val valueSerializer = serializerClass.objectInstance ?: serializerClass.createInstance()
+  return valueSerializer as ValueSerializer<Any?>
+}
+```
+- @CustomSerializer 어노테이션이 있는지 찾음
+- object 선언에 의해 생성된 싱글턴을 가리키는 objectInstance라는 프로퍼티는 null이 아님
+- object의 경우 싱글턴 인스턴스를 사용해 모든 객체를 직렬화 하면 되므로 createInstance가 필요없음
+- 위의 getSerializer를 이용하여 serializeProperty를 완성할 수 있다
+```.kt
+private fun StringBuilder.serializeProperty(
+  prop: KProperty1<Any, *>, obj: Any
+) {
+  val jsonNameAnn = prop.findAnnotation<JsonName>()
+  val propName = jsonNameAnn?.name ?: prop.name
+  serializeString(propName)
+  append(": )
+  val value = prop.get(obj)
+  val jsonValue = prop.getSerializer()?.toJsonValue(value) ?: value
+  serializePropertyValue(jsonValue)
+}
+```
+
+### 2-4 Json 파싱과 객체 역직렬화
+```.kt
+data class Author(val name: String)
+data class Book(val title: String, val author: Author)
+
+fun main() {
+  val json = """
+    {
+      "title": "Catch-22",
+      "author": ...
+    }
+  """
+
+  val book = deserialize<Book>(json)
+}
+```
+... 제이키드 이야기 ㅜ_ㅜ
+
+### 2-5 callBy()와 리플렉션을 이용해 객체 만들기
+- KCallable.call은 인자 리스트를 받아 함수나 생성자를 호출해준다
+- 하지만 KCallable.call은 디폴트 파라미터를 지원하지 않는다
+- 디폴트 파라미터를 처리하려면 KCallable.callBy를 사용해야 한다
+```.kt
+interface KCallable<out R> {
+  fun callBy(args: Map<KParameter, Any?>): R
+}
+```
+- 이 함수는 맵을 인자로 받기때문에 파라미터의 순서를 신경쓰지 않아도 되며
+- 맵에서 파라미터를 찾을 수 없으면서 기본값이 정의되어 있는 경우 기본값을 사용한다
+- 단 맵에 들어가는 타입에 신경을 써야한다 각 값의 타입이 생성자의 파라미터 타입과 일치하지 않으면 Exception이 발생한다
+- Type 객체를 얻으려면 typeOf<>() 함수를 사용할 수 있다
+```.kt
+fun serializerForType(type: Type): ValueSerializer<out Any?>? =
+  when(type) {
+    typeOf<Byte>() -> ByteSerializer
+    typeOf<Int>() -> IntSerializer
+    typeOf<Boolean>() -> BooleanSerializer
+  }
+```
