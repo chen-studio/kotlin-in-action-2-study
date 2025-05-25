@@ -232,5 +232,47 @@ var counter = 0
 fun main() {
   val kProperty = ::counter
   kProperty.setter.call(21)
+  println(kProperty.get())
 }
+```
+- 멤버 프로퍼티는 KProperty1이나 KMutableProperty1인스턴스로 표현된다
+- 그 안에는 인자가 1개인 get 메서드가 들어있으며 get 메서드에 수신객체를 넘겨야한다
+```.kt
+class Person(val name: String, val age: Int)
+
+fun main() {
+  val person = Person("Alice", 29)
+  val memberProperty = Person::age
+  memberProperty.get(person) // 29
+}
+```
+- KProperty1은 제네릭 클래스이다
+- memberProperty 변수는 KProperty<Person, Int> 타입으로
+- 첫 번쨰 타입 파라미터는 수신 객체 타입, 두 번째 타입 파라미터는 프로퍼티 타입을 표현한다
+- 최상위 수준이나 클래스 안에 정의된 프로퍼티만 리플렉션으로 접근할 수 있고 함수의 로컬 변수에는 접근할 수 없다
+- 함수 안에서 로컬 변수 x를 정의하고 그 변수에 대한 참조를 얻으려 시도하면 References to variables aren't supported yet이라는 오류 문구를 볼 수 있다
+
+![image](https://github.com/user-attachments/assets/81be2462-024b-4e84-9bad-652e7b6edddf)
+
+### 12-2 리플렉션을 사용해 객체 직렬화 구현
+```.kt
+private fun StringBuilder.serializeObject(obj: Any) {
+  val kClass = obj::class as KClass<Any>
+  val properties = kClass.memberProperties
+
+  properties.joinToStringBuilder(this, prefix = "{", postfix = "}") { prop ->
+      serializeString(prop.name)
+      append(": ")
+      serializePropertyValue(prop.get(obj))
+  }
+}
+```
+
+### 12-3 어노테이션을 활용해 직렬화 제어
+- 클래스의 멤버 프로퍼티를 가져올때 KClass 인스턴스의 memberProperties를 사용했다
+- KAnnotatedElement 인터페이스에는 annotations라는 프로퍼티, 소스코드상에서 @Rentention Runtime으로 지정한 모든 어노테이션의 정보가 들어있다
+- KProperty는 KAnnotatedElement를 확장하므로 property.annotations를 통해 프로퍼티의 모든 어노테이션을 얻을 수 있다
+- findAnnotation 함수를 사용하면 어노테이션이 붙은 프로퍼티를 필터링할 수 있다
+```.kt
+val properties = kClass.memberProperties.filter { it.findAnnotation<JsonExclude>() == null }
 ```
