@@ -38,3 +38,44 @@ fun createSimpleTable() = createHTML().
 - DSL 문법 자체를 학습해야 함
 - 이런 단점을 해결하기 위해 코틀린에선 내부 DSL을 지원한다
 
+### 1-2 내부 DSL은 프로그램의 나머지 부분과 매끄럽게 통합된다
+- 독립적인 문법 구조를 갖는 외부 DSL과는 달리 내부 DSL은 범용 언어로 작성된 프로그랭의 일부이며 동일한 문법을 사용한다
+- 따라서 DSL의 장점을 유지하면서 코틀린의 문법을 사용하는 것이다
+
+```.sql
+SELECT Country.name, COUNT(Customer.id)
+    FROM Country
+INNER JOIN Customer
+    ON Country.id = Customer.country_id
+GROUP BY Country.name
+ORDER BY COUNT(Customer.id) DESC
+LIMIT 1
+```
+```.kt
+(Country innerJoin Customer)
+    .slice(Country.name, Count(Customer.id))
+    .selectAll()
+    .groupBy(Country.name)
+    .orderBy(Count(Customer.id), order = SortOrder.DESC)
+    .limit(1)
+```
+
+### 1-3 DSL의 구조
+- DSL과 일반 API 사이에 잘 정의된 경계는 없음
+- infix나 연산자 오버로딩에 의존하기도 함
+- 하지만 DSL은 구조 또는 문법적 특징이 있다
+- 전형적인 라이브러리는 함수 호출시 아무런 구조가 없으며 한 호출과 다른 호출 사이에 맥락이 유지되지 않음
+- 이런 API를 명령-질의(commend-query) API 라고 부른다
+
+```.kt
+// DSL
+dependencies {
+  testImplementation(...)
+  implementation(...)
+  ...
+}
+
+// 일반 명령-질의
+project.dependencies.add("testImplementation", ...)
+project.dependencies.add("implementation", ...)
+```
