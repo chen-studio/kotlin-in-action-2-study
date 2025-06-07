@@ -185,6 +185,127 @@ inline fun <T, R> with(receiver: T, block: T.() -> R): R = receiver.block()
 
 ### 2-2. 수신 객체 지정 람다를 HTML 빌더 안에서 사용
 ```.kt
+fun createSimpleTable() = createHTML().
+  table {
+    tr {
+      td { +"cell" }
+    }
+  }
+```
+- 이 코드는 일반 코틀린 코드이며 어떤 특별한 템플릿 언어 같은 것이 아님
+- 이 안에서 수신 객체 지정 람다가 어떻게 사용되는지 보자
+```.kt
+fun createSimpleTable() = createHTML().
+  table { //this: TABLE
+    tr { //this: TR
+      td { //this: TD
+        +"cell"
+      }
+    }
+  }
+```
+- 실제로는 IDE에서 수신 타입을 시각화할 수 있도록 도와준다
+```.kt
+open class Tag
 
+class TABLE : Tag {
+    fun tr(init: TR.() -> Unit)
+}
+
+class TR : Tag {
+    fun td(init: TD.() -> Unit)
+}
+
+class TD
+```
+- TABLE, TR, TD는 모두 HTML 생성 코드에 명시적으로 나타나면 안 되는 유틸리티 클래스다
+- 따라서 이름을 모두 대문자로 만들어서 일반 클래스와 구분한다
+- 나중에 이 안에 DSL에 도움이 될 수 있는 제약을 추가할 것이다
+- 수신 객체를 명시해서 함수를 한번 살펴보자
+```.kt
+fun createSimpleTable() = createHTML().table {
+  this@table.tr {
+    (this@tr).td {
+      +"cell"
+    }
+  }
+}
+```
+- 수신 객체 지정 람다가 아닌 일반 람다를 사용하면 HTML 생성 코드 구문이 알아볼 수 없을 정도로 난잡해 질 것이다
+- 하지만 만약 깊이가 깊은 구조에서는 어떤 식의 수신 객체가 무엇인지 분명하지 않아서 혼동이 올 수 있다
+- 예를들어 img 람다 안에서 바깥쪽 a 태그의 href 프로퍼티를 참조할 수 있다
+```.kt
+createHTML().body {
+  a {
+    img {
+      href = "https://..."
+    }
+  }
+}
+```
+- 이를 막기위해 코틀린은 @DslMarker 어노테이션을 제공하여 내포된 람다에서 외부 람다의 수신 객체에 접근하지 못하게 제한할 수 있다
+```.kt
+@DslMarker
+annotation class HtmlTagMarker
+```
+- @HtmlTagMarker 어노테이션이 붙은 선언에는 암시적 수신 객체에 대한 제약이 추가 된다
+- @DslMarker 어노테이션이 붙은 영역 안에서는 암시적 수신 객체가 결코 2개가 될 수 없다
+- 우리가 작성하는 태그는 모두 Tag 클래스의 하위 클래스 이므로 @HtmlTagMarker를 아래처럼 추가한다
+```.kt
+@HtmlTagMarker
+open class Tag
+```
+- 이제 아래 코드는 컴파일 에러가 발생한다
+```.kt
+createHTML().body {
+  a {
+    img {
+      href = "https://..." // 불가능
+    }
+  }
+}
 ```
 
+```.kt
+@DslMarker
+annotation class HtmlTagMarker
+
+@HtmlTagMarker
+open class Tag(val name: String) {
+    private val children = mutableListOf<Tag>() // 모든 내포 태그 저장
+
+    protected fun <T : Tag> doInit(child: T, init: T.() -> Unit) {
+        child.init() // 자식 태그 초기화
+        children.add(child) // 자식 태그에 대한 참조 저장
+    }
+
+    override fun toString() =
+        "<$name>${children.joinToString("")}</$name>"
+}
+
+fun table(init: TABLE.() -> Unit) = TABLE().apply(init)
+
+class TABLE : Tag("table") {
+    fun tr(init: TR.() -> Unit) = doInit(TR(), init)
+}
+
+class TR : Tag("tr") {
+    fun td(init: TD.() -> Unit) = doInit(TD(), init)
+}
+
+class TD : Tag("td")
+
+fun createTable() =
+    table {
+        tr {
+            td {
+            }
+        }
+    }
+
+fun main() {
+    println(createTable())
+    // <table><tr><td></td></tr></table>
+}
+```
+- 이처럼 수신 객체 지정 람다는 DSL을 만들때 아주 좋은 도구이다
