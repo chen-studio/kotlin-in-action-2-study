@@ -79,3 +79,112 @@ dependencies {
 project.dependencies.add("testImplementation", ...)
 project.dependencies.add("implementation", ...)
 ```
+
+### 1-4 내부 DSL로 HTML 만들기
+
+```.html
+<table>
+  <tr>
+    <td>1</td>
+    <td>one</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>two</td>
+  </tr>
+</table>
+```
+
+```.kt
+import kotlinx.html.stream.createHTML
+import kotlinx.html.*
+ 
+fun createTable() = createHTML().table {
+    val numbers = mapOf(1 to "one", 2 to "two")
+    for ((num, string) in numbers) {
+        tr {
+            td { +"$num" }
+            td { +string }
+        }
+    }
+}
+```
+
+## 2. 구조화된 API 구축: DSL에서 수신 객체 지정 람다 사용
+- 수신 객체 지정 람다를 사용하여 DSL을 활용하는법
+
+### 2-1. 수신 객체 지정 람다와 확장 함수 타입
+- buildString에 대한 예시
+
+```.kt
+fun buildString(
+    builderAction: (StringBuilder) -> Unit,
+): String {
+    val sb = StringBuilder()
+    builderAction(sb)
+    return sb.toString()
+}
+
+fun main() {
+    val s = buildString {
+        it.append("Hello, ")
+        it.append("World!")
+    }
+    println(s)
+    // Hello, World!
+}
+```
+- 파라미터 (it) 대신 수신 객체 전달로 더 간결한 코드 작성
+```.kt
+fun buildString(
+    builderAction: StringBuilder.() -> Unit,
+): String {
+    val sb = StringBuilder()
+    sb.builderAction()
+    return sb.toString()
+}
+
+fun main() {
+    val s = buildString {
+        this.append("Hello, ") // this는 모호성을 해결할때만 사용
+        append("World!")
+    }
+    println(s)
+    // Hello, World!
+}
+
+```
+- 아래처럼 확장 함수 타입의 변수를 정의할 수도 있다 (사용할일은 잘 없을듯)
+```.kt
+val appendExcl: StringBuilder.() -> Unit =
+    { this.append("!") }
+
+fun main() {
+    val stringBuilder = StringBuilder("Hi")
+    stringBuilder.appendExcl()
+    println(stringBuilder)
+    // Hi!
+    println(buildString(appendExcl))
+    // !
+}
+```
+- buildString을 apply와 함께 사용하면 단 한줄로 작성할 수 있다
+```.kt
+fun buildString(builderAction: StringBuilder.() -> Unit): String =
+  StringBuilder().apply(builderAction).toString()
+```
+- apply, with는 아래와 같이 구현되어 있으며 결과를 받아서 쓸 필요가 없다면 두 함수를 서로 바꿔서 쓸 수 있다
+```.kt
+inline fun <T> T.apply(block: T.() -> Unit): T {
+  block()
+  return this
+}
+
+inline fun <T, R> with(receiver: T, block: T.() -> R): R = receiver.block()
+```
+
+### 2-2. 수신 객체 지정 람다를 HTML 빌더 안에서 사용
+```.kt
+
+```
+
