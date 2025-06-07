@@ -309,3 +309,163 @@ fun main() {
 }
 ```
 - 이처럼 수신 객체 지정 람다는 DSL을 만들때 아주 좋은 도구이다
+
+### 2-3. 코트린 빌더: 추상화와 재사용을 가능하게 해준다
+- 아래와 같이 u1, li, h2, p 등의 태그를 사용하는 코드가 있다
+```.kt
+fun buildBookList() = createHTML().body {
+    ul {
+        li { a("#1") { +"The Three-Body Problem" } }
+        li { a("#2") { +"The Dark Forest" } }
+        li { a("#3") { +"Death’s End" } }
+    }
+ 
+    h2 { id = "1"; +"The Three-Body Problem" }
+    p { +"The first book tackles..." }
+ 
+    h2 { id = "2"; +"The Dark Forest" }
+    p { +"The second book starts with..." }
+ 
+    h2 { id = "3"; +"Death’s End" }
+    p { +"The third book contains..." }
+}
+```
+- 추상화를 통해 아래처럼 불필요한 코드를 줄일 수 있다
+```.kt
+fun buildBookList() = createHTML().body {
+    listWithToc {
+        item("The Three-Body Problem", "The first book tackles...")
+        item("The Dark Forest", "The second book starts with...")
+        item("Death’s End", "The third book contains...")
+    }
+}
+```
+- 그렇다면 실제로 listWithToc 함수를 어떻게 구현할까? 아래처럼 만들 수 있다
+```.kt
+@HtmlTagMarker
+class LISTWITHTOC {
+    val entries = mutableListOf<Pair<String, String>>()
+    fun item(headline: String, body: String) {
+        entries += headline to body
+    }
+}
+
+fun BODY.listWithToc(block: LISTWITHTOC.() -> Unit) {
+    val listWithToc = LISTWITHTOC()
+    listWithToc.block()
+    ul {
+        for ((index, entry) in listWithToc.entries.withIndex()) {
+            li { a("#$index") { +entry.first } }
+        }
+    }
+    for ((index, entry) in listWithToc.entries.withIndex()) {
+        h2 { id = "$index"; +entry.first }
+        p { +entry.second }
+    }
+}
+```
+
+## 3. invoke 관례를 사용해 더 유연하게 블록 내포시키기
+- invoke 관례를 사용하면 어떤 커스텀 타입의 객체를 함수처럼 호출할 수 있다
+
+### 3-1. invoke 관례를 사용해 더 유연하게 블록 내포시키기
+```.kt
+class Greeter(val greeting: String) {
+    operator fun invoke(name: String) {
+        println("$greeting, $name!")
+    }
+}
+
+fun main() {
+    val bavarianGreeter = Greeter("Servus")
+    bavarianGreeter("Dmitry") // Greeter 인스턴스를 함수처럼 호출한다
+    // Servus, Dmitry!
+}
+```
+- bavarianGreeter("Dmitry")는 내부적으로 bavarianGreeter.invoke("Dmitry")로 컴파일된다
+
+### 3-2. DSL의 invoke 관례: gradle 의존 관계 선언
+- 처음에 살펴보았던 코드이다
+```.kt
+dependencies {
+  testImplementation(...)
+  implementation(...)
+}
+```
+- 이 코드처럼 내포된 블록 구조를 허용하면서 평평한 호출 구조도 함께 지원하는 API를 만들고 싶다
+```.kt
+dependencies.implementation(...)
+dependencies {
+  implementation(...)
+}
+```
+- 아래는 DependencyHandler의 구현에서 최소한의 부분만 보여준다
+```.kt
+class DependencyHandler {
+    fun implementation(coordinate: String) {
+        println("Added dependency on $coordinate")
+    }
+
+    operator fun invoke(
+        body: DependencyHandler.() -> Unit,
+    ) {
+        body()
+    }
+}
+
+fun main() {
+    val dependencies = DependencyHandler()
+    dependencies.implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+    // Added dependency on org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0
+    dependencies {
+        implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")
+    }
+    // Added dependency on org.jetbrains.kotlinx:kotlinx-datetime:0.5.0
+}
+```
+- 적은 양의 코드지만 invoke 관례를 이용하면 유연성이 훨씬 커진다
+
+## 4. 실전 코틀린 DSL
+- 테스팅, 다양한 날짜 리터럴, 데이터베이스 질의 같은 다양한 주제를 살펴보자
+
+### 4-1. 중위 호출 연쇄시키기
+- kotest에서는 아래처럼 중위 호출을 활용한다
+```.kt
+val s = "kotlin".uppercase()
+s should startWith("K")
+
+infix fun <T> T.should(matcher: Matcher<T>) = matcher.test(this)
+// should 함수는 Matcher 인스턴스를 요구한다
+
+interface Matcher<T> {
+  fun test(value: T)
+}
+fun startWith(prefix: String): Matcher<String> {
+  return object: Matcher<String> {
+    override fun test(value: String) {
+      if(!value.startsWith(prefix) {
+        throw AssertionError("$value does not start with $prefix")
+      }
+    }
+  }
+}
+```
+
+### 4-2. 원시 타입에 대해 확장 함수 정의하기: 날짜 처리
+```.kt
+val now = Clock.System.now()
+val yesterday = now - 1.days
+val later = now + 5.hours
+
+val Int.days: Duration
+    get() = this.toDuration(DurationUnit.DAYS)
+
+val Int.hours: Duration
+    get() = this.toDuration(DurationUnit.HOURS)
+
+val Int.fortnights: Duration get() =
+  (this * 14).toDuration(DurationUnit.DAYS)
+```
+
+### 4-3. 멤버 확장 함수: SQL을 위한 내부 DSL
+- 
