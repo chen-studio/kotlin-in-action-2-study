@@ -104,4 +104,60 @@ suspend fun showUserInfo(credentials: Credentials) {
 - 네트워크 요청의 경우 Ktor, Retrofit, OkHttp와 같은 라이브러리들이 코루틴을 고려해 작성되었다
 
 ## 5. 코루틴을 다른 접근 방법과 비교
+- 코루틴이 어떤점이 다르고 더 나은지 콜백, 반응형스트림(RxJava), Future와 비교하여 살펴보자
+- 이런 접근방법을 사용해본 적이 없다면 이부분은 넘어가도 좋다
+```.kt
+/* 콜백 사용 */
+fun login(credentials: Credentials): UserID
+fun loadUserData(userID: UserID): UserData
+fun showData(data: UserData)
 
+fun showUserInfo(credentials: Credentials) {
+  loginAsync(credentails) { userID ->
+    loadUserDataAsync(userID) {
+      showData(userData)
+    }
+  }
+}
+
+/* Future 사용 */
+/* 콜백 사용 */
+fun login(credentials: Credentials): UserID
+fun loadUserData(userID: UserID): UserData
+fun showData(data: UserData)
+
+fun showUserInfo(credentials: Credentials) {
+  loginAsync(credentails)
+    .thenCompose { loadUserDataAsync(it) }
+    .thenAccept { showData(it) }
+}
+
+/* RxJava 사용 */
+fun login(credentials: Credentials): UserID
+fun loadUserData(userID: UserID): UserData
+fun showData(data: UserData)
+
+fun showUserInfo(credentials: Credentials) {
+  login(credentials)
+    .flatMap { loadUserData(it) }
+    .doOnSuccess { showData(it) }
+    .subscribe()
+}
+```
+- 이처럼 다른 방식을 사용할땐 새로운 연산자가 필요하며 콜백이 반복되는 등 부가 비용이 존재한다
+- 이와 비교하면 코루틴은 함수에 suspend 키워드만 추가하면 되므로 매우 간편하며 코드의 형태를 유지하며 blocking을 방지할 수 있다
+- 16, 17 장에서 코루틴용 반응형 스트림인 Flow에 대해 자세히 다룬다
+ 
+### 5-1 suspend 함수 호출
+- 일시 중단 함수는 실행을 일시 중단할 수 있기 때문에 일반 코드 아무곳에서나 호출할 수는 없다
+- suspend 함수는 suspend 함수 내에서만 호출할 수 있으며 또는 CoroutineScope(코루틴빌더)를 사용하여 코루틴을 실행해야 한다
+- 물론 suspend 함수 내에서는 일반 함수는 호출할 수 있다 ([함수의 색 문제](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/)를 이해하면 좋다)
+- 만약 suspend 함수가 아닌 함수에서 suspend 함수를 호출하려고 하면 컴파일 에러가 발생한다
+```.kt
+suspend fun mySuspendingFunction() {}
+
+fun main() {
+  mySuspendingFunction()
+}
+```
+- 더 범용적이고 강력한 방법은 코루틴 빌더를 사용하는것이다.
