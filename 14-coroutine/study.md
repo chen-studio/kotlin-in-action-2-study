@@ -42,4 +42,66 @@ fun main() {
 - 코틀린에서 스레드의 대안으로 도입한 코루틴이라는 추상화의 장점에 대해 먼저 알아본다
 - 코루틴은 초경량 추상화이며 일반적인 노트북에서도 100,000개 이상의 코루틴을 쉽게 실행할 수 있다
 - 또한 코루틴은 생성하고 관리하는 비용이 저렴하다. 이는 훨씬 세밀한 작업이나 아주 짧은 시간 동안만 실행하는 작업에도 더 넓게 활용할 수 있다는 의미이다
-- 코루틴은 시스템 자원을 블록시키지 않고 실행을 일시 
+- 코루틴은 시스템 자원을 블록시키지 않고 실행을 일시 중단할 수 있으며 나중에 중단된 지점에서 실행을 재개할 수 있다
+- 이는 코루틴이 네트워크 요청이나 I/O 작업에 블로킹 스레드보다 훨씬 효율적이라는 의미다
+- 코루틴은 구조화된 동시성 이라는 개념을 통해 동시 작업의 구조와 계층을 확립하며 취소 및 오류 처리를 위한 매커니즘을 제공한다
+- 동시 계산의 일부가 실패하거나 더 이상 필요하지 않게 됐을 때 구조화된 동시성은 자식으로 시작된 다른 코루틴들도 함께 취소되도록 보장한다
+
+### 실행
+- 내부적으로 코루틴은 하나 이상의 JVM스레드에서 실행된다
+- 이는 코루틴을 사용해 작성한 코드도 여전히 기본 스레드 모델이 제공하는 병렬성을 활용할 수 있지만,
+- 운영체제가 부과하는 스레드의 한계에 얽매이지 않는다는 것을 의미한다
+
+### 코루틴과 프로젝트 룸
+- Project Loom은 JVM에 가상 스레드 형태의 경량 동시성을 도입해 JVM 스레드와 운영체제 스레드 간의 비용이 많이 드는 1:1 결합을 해소하기 위한 노력이다
+- Project Loom이 도입한 Virtual Thread는 코루틴과 비슷한 문제를 해결하려고 노력하기 때문에 그 관계를 탐구할 가치가 있다
+- Virtual Thread에 대해 잘 알고있는 서버 개발자분들의 의견을 구해요 ;-;
+
+## 4. suspend function (일시중단 함수)
+- 코루틴이 스레드, 반응형 스트림, 콜백과 같은 다른 동시성 접근 방식과 다른 핵심 속성으로는 상당수의 경우 코드 `형태`를 크게 변경하지 않아도 된다는 것이다
+- 코드는 여전히 순차적으로 보이며 suspend 키워드가 어떻게 이런 방식을 가능하게 하는지 자세히 살펴보자
+
+### 4-1 suspend 함수를 사용한 코드는 순차적으로 보인다
+- 일반적인 로직을 보고 suspend 함수가 이를 어떻게 개선할 수 있는지 살펴보자
+- showUserInfo라는 함수는 네트워크에서 정보를 요청하고, 정보를 사용자에게 보여준다
+- login과 loadUserData 함수는 네트워크 요청을 보낸다.
+- 이 코드는 현재 어떤 형태의 동시성도 사용하지 않고 단순히 하나의 함수가 완료된 후 다음 함수를 호출하며 마지막으로 네트워크 요청에 대한 응답이 오면 값을 반환한다
+```.kt
+fun login(credentials: Credentials): UserID
+fun loadUserData(userID: UserID): UserData
+fun showData(data: UserData)
+
+fun showUserInfo(credentials: Credentials) {
+  val userID = login(credentials)
+  val userData = loadUserData(userID)
+  showData(userData)
+}
+```
+- 이 작업은 대부분 네트워크 작업 결과를 기다리는 데 소모하며, showUserInfo 함수가 실행중인 스레드를 블록시킨다.
+- 앞에서 언급한 것처럼 스레드를 블록하는 것은 바람직 하지 않다
+- 이 함수를 코루틴을 사용하여 개선해보자. 이전 코드와의 차이점은 함수 앞에 suspend 키워드가 붙어있다는 점 뿐이다.
+```.kt
+suspend fun login(credentials: Credentials): UserID
+suspend fun loadUserData(userID: UserID): UserData
+fun showData(data: UserData)
+
+suspend fun showUserInfo(credentials: Credentials) {
+  val userID = login(credentials)
+  val userData = loadUserData(userID)
+  showData(userData)
+}
+```
+- 함수에 suspend 키워드가 붙은것은 어떤 의미일까?
+- 이 변경자는 함수가 실행을 잠시 멈출 수도 있다는 뜻이다
+- 예를 들어 네트워크 응답을 기다리는 경우 실행을 일시 중단할 수 있다
+- 일시 중단은 기저 스레드를 블록시키지 않는다.
+- 대신 함수 실행이 일시 중단되면 다른 코드가 같은 스레드에서 실행될 수 있다
+![image](https://github.com/user-attachments/assets/35059f0d-6363-45bd-9b19-341b70d4d208)
+- 이처럼 코드 구조를 변경하지 않았으며 코드는 여전히 순차적으로 보이고 동작하지만 블로킹 코드의 단점은 사라졌다
+- 네트워크 응답을 기다리는 동안 기저 스레드는 다른 작업을 자유롭게 수행할 수 있다
+- 물론 이 모든것이 마법처럼 동작하는 것은 아니며 login, loginUserData의 구현도 코틀린 코루틴을 고려해 작성되어야 한다
+- 실제로 코틀린 생태계의 많은 라이브러리가 코루틴과 함께 작동하는 API를 제공한다
+- 네트워크 요청의 경우 Ktor, Retrofit, OkHttp와 같은 라이브러리들이 코루틴을 고려해 작성되었다
+
+## 5. 코루틴을 다른 접근 방법과 비교
+
